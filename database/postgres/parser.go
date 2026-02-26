@@ -1108,17 +1108,21 @@ func (p PostgresParser) parseForeignKey(constraint *pgquery.Constraint) (*parser
 	if err != nil {
 		return nil, err
 	}
-	return &parser.ForeignKeyDefinition{
-		ConstraintName:   parser.NewIdent(constraint.Conname, false),
-		IndexColumns:     idxCols,
-		ReferenceColumns: refCols,
-		ReferenceName:    refName,
-		OnDelete:         p.parseFkAction(constraint.FkDelAction),
-		OnUpdate:         p.parseFkAction(constraint.FkUpdAction),
-		ConstraintOptions: &parser.ConstraintOptions{
+	var constraintOptions *parser.ConstraintOptions
+	if constraint.Deferrable || constraint.Initdeferred {
+		constraintOptions = &parser.ConstraintOptions{
 			Deferrable:        constraint.Deferrable,
 			InitiallyDeferred: constraint.Initdeferred,
-		},
+		}
+	}
+	return &parser.ForeignKeyDefinition{
+		ConstraintName:    parser.NewIdent(constraint.Conname, false),
+		IndexColumns:      idxCols,
+		ReferenceColumns:  refCols,
+		ReferenceName:     refName,
+		OnDelete:          p.parseFkAction(constraint.FkDelAction),
+		OnUpdate:          p.parseFkAction(constraint.FkUpdAction),
+		ConstraintOptions: constraintOptions,
 	}, nil
 }
 
