@@ -141,3 +141,34 @@ func TestCreateFunctionWithPgquery(t *testing.T) {
 		t.Errorf("expected Ignore, got %T", funcStmt)
 	}
 }
+
+func TestCompareConstraintOptions(t *testing.T) {
+	genericParser := database.NewParser(parser.ParserModePostgres)
+	postgresParser := NewParserWithMode(PsqldefParserModePgquery)
+
+	sql := `
+    CREATE TABLE users (
+        user_id uuid PRIMARY KEY
+    );
+    CREATE TABLE user_profiles (
+        profile_id uuid PRIMARY KEY,
+        user_id uuid,
+        status VARCHAR(255)
+    );
+    ALTER TABLE user_profiles ADD CONSTRAINT fk_user_profiles_user
+            FOREIGN KEY(user_id) REFERENCES users(user_id) ON UPDATE NO ACTION ON DELETE RESTRICT;
+	`
+	psqlResult, err := postgresParser.Parse(sql)
+	if err != nil {
+		t.Fatalf("failed to parse SQL: %v", err)
+	}
+
+	genericResult, err := genericParser.Parse(sql)
+	if err != nil {
+		t.Fatalf("failed to parse SQL with generic parser: %v", err)
+	}
+
+	assert.Equal(t,
+		genericResult[2].Statement.(*parser.DDL).ForeignKey.ConstraintOptions,
+		psqlResult[2].Statement.(*parser.DDL).ForeignKey.ConstraintOptions)
+}
