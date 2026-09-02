@@ -175,3 +175,28 @@ func TestNormalizeTrimFunction(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeTrimExprPreservesDirection(t *testing.T) {
+	column := func(name string) parser.Expr {
+		return &parser.ColName{Name: parser.NewIdent(name, false)}
+	}
+
+	tests := []struct {
+		direction string
+		want      string
+	}{
+		{direction: "both", want: "trim(value)"},
+		{direction: "leading", want: "trim(leading from value)"},
+		{direction: "trailing", want: "trim(trailing from value)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.direction, func(t *testing.T) {
+			expr := &parser.TrimExpr{Direction: tt.direction, String: column("value")}
+			got := normalizeCheckExpr(expr, GeneratorModePostgres)
+			if actual := parser.String(got); actual != tt.want {
+				t.Errorf("normalizeCheckExpr() = %q, want %q", actual, tt.want)
+			}
+		})
+	}
+}

@@ -392,12 +392,14 @@ func normalizeCheckExprWith(expr parser.Expr, mode GeneratorMode, canonicalizeAr
 		}
 		return &parser.ParenExpr{Expr: normalized}
 	case *parser.TrimExpr:
-		if mode != GeneratorModePostgres {
-			return expr
+		direction := strings.ToLower(e.Direction)
+		if direction == "both" {
+			direction = ""
 		}
 		return &parser.TrimExpr{
-			TrimChar: recur(e.TrimChar, mode),
-			String:   recur(e.String, mode),
+			Direction: direction,
+			TrimChar:  recur(e.TrimChar, mode),
+			String:    recur(e.String, mode),
 		}
 	case *parser.AndExpr:
 		// Normalize operands and unwrap unnecessary parentheses around them
