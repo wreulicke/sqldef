@@ -11,6 +11,14 @@ ConstraintCheck:
       CONSTRAINT `books_type_chk` CHECK (`type` IN ('manga', 'novel'))
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
   min_version: '8.0'
+TrimCheckConstraintIsIdempotent:
+  desired: |
+    CREATE TABLE `users` (
+      `id` bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      `name` varchar(255) NOT NULL,
+      CHECK (CHAR_LENGTH(TRIM(`name`)) > 0)
+    ) ENGINE=InnoDB;
+  min_version: '8.0'
 ColumnCheck:
   flavor: "!mariadb"
   desired: |

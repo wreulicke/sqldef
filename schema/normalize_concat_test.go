@@ -98,3 +98,80 @@ func TestFormatExprQuoteAwarePreservesQuotedColumnInsideConcat(t *testing.T) {
 		t.Errorf("expected quoted \"MyCol\" to be preserved inside ||, got: %s", got)
 	}
 }
+
+func TestNormalizeTrimFunction(t *testing.T) {
+	column := func(name string) parser.SelectExpr {
+		return &parser.AliasedExpr{Expr: &parser.ColName{Name: parser.NewIdent(name, false)}}
+	}
+
+	tests := []struct {
+		name      string
+		function  *parser.FuncExpr
+		want      string
+		wantMatch bool
+	}{
+		{
+			name: "trim",
+			function: &parser.FuncExpr{
+				Name:  parser.NewIdent("TRIM", false),
+				Exprs: parser.SelectExprs{column("value")},
+			},
+			want:      "trim(value)",
+			wantMatch: true,
+		},
+		{
+			name: "qualified btrim",
+			function: &parser.FuncExpr{
+				Qualifier: parser.NewIdent("pg_catalog", false),
+				Name:      parser.NewIdent("btrim", false),
+				Exprs:     parser.SelectExprs{column("value")},
+			},
+			want:      "trim(value)",
+			wantMatch: true,
+		},
+		{
+			name: "btrim with trim character",
+			function: &parser.FuncExpr{
+				Name:  parser.NewIdent("btrim", false),
+				Exprs: parser.SelectExprs{column("chars"), column("value")},
+			},
+			want:      "trim(chars from value)",
+			wantMatch: true,
+		},
+		{
+			name: "function from another schema",
+			function: &parser.FuncExpr{
+				Qualifier: parser.NewIdent("public", false),
+				Name:      parser.NewIdent("btrim", false),
+				Exprs:     parser.SelectExprs{column("value")},
+			},
+			wantMatch: false,
+		},
+		{
+			name: "unsupported argument count",
+			function: &parser.FuncExpr{
+				Name:  parser.NewIdent("trim", false),
+				Exprs: parser.SelectExprs{column("a"), column("b"), column("c")},
+			},
+			wantMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := normalizeTrimFunction(tt.function, tt.function.Exprs)
+			if ok != tt.wantMatch {
+				t.Fatalf("normalizeTrimFunction() matched = %v, want %v", ok, tt.wantMatch)
+			}
+			if !tt.wantMatch {
+				return
+			}
+			if actual := parser.String(got); actual != tt.want {
+				t.Errorf("normalizeTrimFunction() = %q, want %q", actual, tt.want)
+			}
+			if _, ok := got.(*parser.TrimExpr); !ok {
+				t.Errorf("normalizeTrimFunction() returned %T, want *parser.TrimExpr", got)
+			}
+		})
+	}
+}

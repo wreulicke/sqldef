@@ -279,6 +279,38 @@ func normalizeCheckExprForOutput(expr parser.Expr, mode GeneratorMode) parser.Ex
 	return normalizeCheckExprWith(expr, mode, false)
 }
 
+// normalizeTrimFunction canonicalizes parser implementations that represent TRIM
+// or PostgreSQL's btrim as a function call. TRIM is standard SQL, while btrim is
+// PostgreSQL-specific. PostgreSQL parser implementations may emit btrim either
+// qualified or unqualified, so only non-pg_catalog qualified functions are excluded.
+func normalizeTrimFunction(e *parser.FuncExpr, exprs parser.SelectExprs) (parser.Expr, bool) {
+	name := strings.ToLower(e.Name.Name)
+	if name != "trim" && name != "btrim" {
+		return nil, false
+	}
+	if !e.Qualifier.IsEmpty() && !strings.EqualFold(e.Qualifier.Name, "pg_catalog") {
+		return nil, false
+	}
+
+	args := make([]parser.Expr, len(exprs))
+	for i, expr := range exprs {
+		aliased, ok := expr.(*parser.AliasedExpr)
+		if !ok {
+			return nil, false
+		}
+		args[i] = aliased.Expr
+	}
+
+	switch len(args) {
+	case 1:
+		return &parser.TrimExpr{String: args[0]}, true
+	case 2:
+		return &parser.TrimExpr{TrimChar: args[0], String: args[1]}, true
+	default:
+		return nil, false
+	}
+}
+
 // canonicalizeArrays sorts and deduplicates ANY/ALL array elements, which is wanted when
 // comparing but not when generating DDL.
 func normalizeCheckExprWith(expr parser.Expr, mode GeneratorMode, canonicalizeArrays bool) parser.Expr {
@@ -359,6 +391,14 @@ func normalizeCheckExprWith(expr parser.Expr, mode GeneratorMode, canonicalizeAr
 			return normalized
 		}
 		return &parser.ParenExpr{Expr: normalized}
+	case *parser.TrimExpr:
+		if mode != GeneratorModePostgres {
+			return expr
+		}
+		return &parser.TrimExpr{
+			TrimChar: recur(e.TrimChar, mode),
+			String:   recur(e.String, mode),
+		}
 	case *parser.AndExpr:
 		// Normalize operands and unwrap unnecessary parentheses around them
 		left := recur(e.Left, mode)
@@ -425,6 +465,9 @@ func normalizeCheckExprWith(expr parser.Expr, mode GeneratorMode, canonicalizeAr
 			}
 			return arg
 		})
+		if normalized, ok := normalizeTrimFunction(e, normalizedExprs); ok {
+			return normalized
+		}
 		if atz, ok := atTimeZoneFromTimezoneCall(mode, e.Qualifier, strings.ToLower(e.Name.Name), normalizedExprs); ok {
 			return atz
 		}

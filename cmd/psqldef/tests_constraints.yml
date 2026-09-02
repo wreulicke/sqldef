@@ -350,6 +350,13 @@ CheckConstraint:
     ALTER TABLE "public"."test" DROP CONSTRAINT "test_t4_check";
     ALTER TABLE "public"."test" DROP CONSTRAINT "test_d1_check";
     ALTER TABLE "public"."test" DROP CONSTRAINT "test_d2_check";
+UnnamedTrimCheckConstraintIsIdempotent:
+  desired: |
+    CREATE TABLE users (
+      id bigint NOT NULL PRIMARY KEY,
+      name varchar(255) NOT NULL,
+      CHECK (char_length(trim(name)) > 0)
+    );
 CheckConstraintWithRowConstructor:
   desired: |
     CREATE TABLE test (
