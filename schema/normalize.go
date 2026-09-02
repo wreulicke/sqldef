@@ -280,12 +280,19 @@ func normalizeCheckExprForOutput(expr parser.Expr, mode GeneratorMode) parser.Ex
 }
 
 // normalizeTrimFunction canonicalizes parser implementations that represent TRIM
-// or PostgreSQL's btrim as a function call. TRIM is standard SQL, while btrim is
-// PostgreSQL-specific. PostgreSQL parser implementations may emit btrim either
-// qualified or unqualified, so only non-pg_catalog qualified functions are excluded.
+// or PostgreSQL's trim-family functions as a function call. PostgreSQL parser
+// implementations may emit these functions either qualified or unqualified, so
+// only non-pg_catalog qualified functions are excluded.
 func normalizeTrimFunction(e *parser.FuncExpr, exprs parser.SelectExprs) (parser.Expr, bool) {
 	name := strings.ToLower(e.Name.Name)
-	if name != "trim" && name != "btrim" {
+	direction := ""
+	switch name {
+	case "trim", "btrim":
+	case "ltrim":
+		direction = "leading"
+	case "rtrim":
+		direction = "trailing"
+	default:
 		return nil, false
 	}
 	if !e.Qualifier.IsEmpty() && !strings.EqualFold(e.Qualifier.Name, "pg_catalog") {
@@ -303,9 +310,9 @@ func normalizeTrimFunction(e *parser.FuncExpr, exprs parser.SelectExprs) (parser
 
 	switch len(args) {
 	case 1:
-		return &parser.TrimExpr{String: args[0]}, true
+		return &parser.TrimExpr{Direction: direction, String: args[0]}, true
 	case 2:
-		return &parser.TrimExpr{TrimChar: args[0], String: args[1]}, true
+		return &parser.TrimExpr{Direction: direction, TrimChar: args[0], String: args[1]}, true
 	default:
 		return nil, false
 	}
